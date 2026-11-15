@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
+import Link from 'next/link'
 import { ArrowRight, Eye, EyeOff, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -15,6 +16,7 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [signedIn, setSignedIn] = useState(false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -37,15 +39,15 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
         }
         setMessage('Check your inbox for a link to confirm your account.')
       } else if (mode === 'reset') {
-        const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo })
+        const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${redirectTo}?next=/auth/reset-password` })
         if (authError) setError('We could not send a reset link right now. Please try again later.')
         else setMessage('If an account exists for that address, a password reset link is on its way.')
       } else {
         const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (authError) setError('Invalid email or password. Please try again.')
         else {
-          setMessage('You’re signed in. Your account area is being prepared.')
-          window.setTimeout(onClose, 900)
+          setSignedIn(true)
+          setMessage('You’re signed in. Your orders and account details are ready.')
         }
       }
     } catch {
@@ -73,6 +75,7 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
           <button className="button-primary account-submit" disabled={loading}>{loading ? 'Please wait…' : mode === 'sign-in' ? 'Sign in' : mode === 'sign-up' ? 'Create account' : 'Send reset link'} <ArrowRight size={15} /></button>
         </form>
         {mode === 'sign-in' && <button className="account-text-button reset-link" onClick={() => { setMode('reset'); setError(''); setMessage('') }}>Forgot your password?</button>}
+        {signedIn && <Link className="account-text-button account-orders-link" href="/account" onClick={onClose}>View my account and orders <ArrowRight size={13} /></Link>}
         <div className="account-switch">{mode === 'sign-in' ? <>New to Afro? <button onClick={() => { setMode('sign-up'); setError(''); setMessage('') }}>Create an account</button></> : <>Already have an account? <button onClick={() => { setMode('sign-in'); setError(''); setMessage('') }}>Sign in</button></>}</div>
       </section>
     </div>
