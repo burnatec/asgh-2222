@@ -16,6 +16,10 @@ Set `PAYSTACK_SECRET_KEY` in Vercel project environment variables for Preview an
 
 Never put the Paystack secret in a `NEXT_PUBLIC_*` variable. A successful payment has not been tested end-to-end until a valid Paystack account and test/live credentials are configured.
 
+## Order email notifications
+
+Transactional order emails are not configured, and the app does not claim to send them. Implementing delivery requires an email provider integration and its deployment credentials. No provider or environment variables have been added under the current setup constraints.
+
 ## Admin access
 
 `/admin` and `/api/admin` require a verified Supabase user whose server-controlled `app_metadata.role` is `admin`. Assign this claim only through a trusted Supabase administrative workflow; do not use editable user metadata or expose a role-editing control to customers. The dashboard supports sales/order overview, order delivery-status updates, customer listing, inventory visibility, and product create/edit/archive. Product image uploads use the connected public Vercel Blob store through `/api/admin/upload`; the API verifies the Supabase admin claim, accepts JPG/PNG/WebP/AVIF files up to 4 MB, and returns a public HTTPS URL saved with the product. `BLOB_READ_WRITE_TOKEN` must be present in the Vercel deployment environment (the connected Blob integration supplies it).
