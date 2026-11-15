@@ -57,7 +57,8 @@ export async function POST(request: Request) {
     if (orderError || !orderRows?.[0]) return NextResponse.json({ error: 'One or more items are unavailable. Please refresh your bag.' }, { status: 409 })
     const order = orderRows[0] as { order_id: string; order_reference: string; total_ghs: number }
 
-    const callbackUrl = `${new URL(request.url).origin}/api/payments/verify`
+    const callbackOrigin = process.env.APP_PUBLIC_URL || new URL(request.url).origin
+    const callbackUrl = new URL('/api/payments/verify', callbackOrigin).toString()
     const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },

@@ -17,6 +17,15 @@ const nextConfig = {
       ],
     }]
   },
+  async rewrites() {
+    const railwayOrigin = process.env.RAILWAY_API_ORIGIN?.replace(/\/$/, '')
+    if (!railwayOrigin) return []
+
+    return [{
+      source: '/api/:path*',
+      destination: `${railwayOrigin}/api/:path*`,
+    }]
+  },
 }
 
 export default nextConfig

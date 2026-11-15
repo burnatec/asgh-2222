@@ -11,7 +11,7 @@ function adminClient() {
 }
 
 export async function GET(request: NextRequest) {
-  const origin = request.nextUrl.origin
+  const origin = process.env.APP_PUBLIC_URL || request.nextUrl.origin
   const reference = request.nextUrl.searchParams.get('reference') || request.nextUrl.searchParams.get('trxref')
   const secret = process.env.PAYSTACK_SECRET_KEY
   if (!reference || !/^AFRO-[A-F0-9]{16}$/.test(reference) || !secret) {
