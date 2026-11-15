@@ -18,7 +18,7 @@ Never put the Paystack secret in a `NEXT_PUBLIC_*` variable. A successful paymen
 
 ## Order email notifications
 
-Transactional order emails are not configured, and the app does not claim to send them. Implementing delivery requires an email provider integration and its deployment credentials. No provider or environment variables have been added under the current setup constraints.
+After Paystack verifies payment and the order transitions to paid, the server sends the customer an order confirmation through the connected Resend integration. `afrosuperstoregh@gmail.com` is used as the reply-to address and receives a blind copy. The sender uses `orders@${RESEND_EMAIL_DOMAIN}`; this domain must be verified in Resend. A Resend idempotency key is derived from the order reference. Email delivery failures are logged without changing a verified payment to failed. Do not use a free Gmail address as the From domain; Resend requires a verified sending domain.
 
 ## Admin access
 
