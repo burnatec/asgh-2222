@@ -1,0 +1,7 @@
+export function SocialMark({ network, size = 17 }: { network: 'Facebook' | 'Instagram' | 'TikTok' | 'YouTube'; size?: number }) {
+  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', xmlns: 'http://www.w3.org/2000/svg', 'aria-hidden': true as const }
+  if (network === 'Facebook') return <svg {...common}><path fill="currentColor" d="M13.35 21v-8.2h2.76l.41-3.2h-3.17V7.56c0-.93.26-1.56 1.59-1.56h1.7V3.14C16.34 3.05 15.4 3 14.31 3c-2.72 0-4.58 1.66-4.58 4.72V9.6H7v3.2h2.73V21h3.62Z" /></svg>
+  if (network === 'Instagram') return <svg {...common}><rect x="3.4" y="3.4" width="17.2" height="17.2" rx="5" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" /><circle cx="17.7" cy="6.6" r="1.1" fill="currentColor" /></svg>
+  if (network === 'TikTok') return <svg {...common}><path fill="currentColor" d="M16.7 3c.35 2.2 1.6 3.52 3.8 3.67v3.2a8.06 8.06 0 0 1-3.77-1.2v6.43a5.9 5.9 0 1 1-5.9-5.9c.36 0 .72.04 1.06.1v3.3a2.67 2.67 0 1 0 1.63 2.47V3h3.18Z" /></svg>
+  return <svg {...common}><path fill="currentColor" d="M23.2 7.1a3 3 0 0 0-2.1-2.12C19.25 4.47 12 4.47 12 4.47s-7.25 0-9.1.51A3 3 0 0 0 .8 7.1 31.2 31.2 0 0 0 .3 12a31.2 31.2 0 0 0 .5 4.9 3 3 0 0 0 2.1 2.12c1.85.51 9.1.51 9.1.51s7.25 0 9.1-.51a3 3 0 0 0 2.1-2.12 31.2 31.2 0 0 0 .5-4.9 31.2 31.2 0 0 0-.5-4.9ZM9.6 15.6V8.4l6.2 3.6-6.2 3.6Z" /></svg>
+}
