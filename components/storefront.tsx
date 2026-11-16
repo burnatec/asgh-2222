@@ -54,7 +54,7 @@ async function getProducts() {
 }
 
 function Logo() {
-  return <a href="#top" className="brand" aria-label="Afro Superstore home"><span className="brand-mark">A<span>+</span></span><span>afro<span className="brand-light">superstore</span></span></a>
+  return <a href="#top" className="brand" aria-label="Afro Superstore home"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-BntWL9FJ4tCF0xmRtGmE95PGUW6bZl.png" alt="" className="brand-logo" /></a>
 }
 
 function ProductCard({ product, addToCart }: { product: Product; addToCart: (product: Product) => void }) {

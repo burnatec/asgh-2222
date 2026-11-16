@@ -12,12 +12,16 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_GH',
   },
-  icons: { icon: '/icon.svg', apple: '/apple-icon.png' },
+  icons: {
+    icon: [{ url: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/favicon-J3FBt5EemjGJX2UercXcsBhA0sxYAh.png', type: 'image/png' }],
+    shortcut: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/favicon-J3FBt5EemjGJX2UercXcsBhA0sxYAh.png',
+    apple: '/apple-icon.png',
+  },
 }
 
 export const viewport: Viewport = {
   colorScheme: 'light',
-  themeColor: '#f8f7f2',
+  themeColor: '#fd1212',
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
