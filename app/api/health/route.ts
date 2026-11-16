@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic'
 
 const requiredVariables = [
   'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
   'PAYSTACK_SECRET_KEY',
   'RESEND_API_KEY',
   'RESEND_EMAIL_DOMAIN',
@@ -15,6 +14,15 @@ const requiredVariables = [
 export async function GET() {
   const missingEnvironmentVariables: string[] = requiredVariables.filter((name) => !process.env[name]?.trim())
   const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY
+
+  if (!publishableKey) {
+    missingEnvironmentVariables.push('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY or SUPABASE_PUBLISHABLE_KEY')
+  }
 
   if (process.env.RAILWAY_PROJECT_ID && !process.env.APP_PUBLIC_URL?.trim()) {
     missingEnvironmentVariables.push('APP_PUBLIC_URL')
