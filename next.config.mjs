@@ -21,10 +21,12 @@ const nextConfig = {
     const railwayOrigin = process.env.RAILWAY_API_ORIGIN?.replace(/\/$/, '')
     if (!railwayOrigin) return []
 
-    return [{
-      source: '/api/:path*',
-      destination: `${railwayOrigin}/api/:path*`,
-    }]
+    return {
+      beforeFiles: [{
+        source: '/api/:path*',
+        destination: `${railwayOrigin}/api/:path*`,
+      }],
+    }
   },
 }
 
