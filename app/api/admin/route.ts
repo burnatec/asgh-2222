@@ -50,9 +50,25 @@ export async function POST(request: Request) {
     const data: unknown = await request.json()
     if (!data || typeof data !== 'object' || !validProduct(data as Record<string, unknown>)) return NextResponse.json({ error: 'Check the product fields and try again.' }, { status: 400 })
     const product = data as Record<string, unknown>
-    const slug = String(product.name).trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    const { data: created, error } = await serviceClient().from('products').insert({ ...product, name: String(product.name).trim(), slug, featured: product.featured === true, active: true }).select('id').single()
-    if (error) return NextResponse.json({ error: 'Could not add this product. The name may already be in use.' }, { status: 409 })
+    const name = String(product.name).trim()
+    const slug = name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const { data: created, error } = await serviceClient().from('products').insert({
+      name,
+      slug,
+      description: String(product.description),
+      price_ghs: Number(product.price_ghs),
+      compare_at_price_ghs: product.compare_at_price_ghs ?? null,
+      image_url: String(product.image_url),
+      category: String(product.category),
+      stock: Number(product.stock),
+      featured: product.featured === true,
+      active: true,
+    }).select('id').single()
+    if (error) {
+      if (error.code === '23505') return NextResponse.json({ error: 'A product with this name is already in the catalogue.' }, { status: 409 })
+      console.error('[admin] Product insert failed', { code: error.code, message: error.message })
+      return NextResponse.json({ error: 'Could not add this product. Please try again.' }, { status: 500 })
+    }
     return NextResponse.json({ id: created.id }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Could not add this product.' }, { status: 500 })
