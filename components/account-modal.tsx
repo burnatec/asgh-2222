@@ -44,8 +44,17 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
         else setMessage('If an account exists for that address, a password reset link is on its way.')
       } else {
         const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        if (authError) setError('Invalid email or password. Please try again.')
-        else {
+        if (authError) {
+          if (authError.code === 'email_not_confirmed') {
+            setError('Please confirm your email address before signing in. Check your inbox for the confirmation link.')
+          } else if (authError.status === 429 || authError.code === 'over_request_rate_limit') {
+            setError('Too many sign-in attempts. Please wait a moment and try again.')
+          } else if (authError.code === 'invalid_credentials' || authError.status === 400) {
+            setError('Invalid email or password. Please try again.')
+          } else {
+            setError('We could not sign you in right now. Please try again later.')
+          }
+        } else {
           setSignedIn(true)
           setMessage('You’re signed in. Your orders and account details are ready.')
         }

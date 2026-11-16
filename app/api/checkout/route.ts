@@ -73,8 +73,16 @@ export async function POST(request: Request) {
       }),
       cache: 'no-store',
     })
-    const payment = await paystackResponse.json()
-    if (!paystackResponse.ok || !payment.status || !payment.data?.authorization_url) {
+    const payment = await paystackResponse.json().catch(() => null) as {
+      status?: boolean
+      message?: string
+      data?: { authorization_url?: string }
+    } | null
+    if (!paystackResponse.ok || !payment?.status || !payment.data?.authorization_url) {
+      console.error('[checkout] Paystack initialization failed', {
+        httpStatus: paystackResponse.status,
+        providerMessage: typeof payment?.message === 'string' ? payment.message.slice(0, 180) : 'Invalid provider response',
+      })
       return NextResponse.json({ error: 'We could not start payment. Please try again or contact support.' }, { status: 502 })
     }
     await admin.from('orders').update({ payment_reference: order.order_reference }).eq('id', order.order_id).eq('user_id', user.id)
