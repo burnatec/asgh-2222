@@ -14,6 +14,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Administrator access required.' }, { status: 403 })
   }
 
+  const blobToken = process.env.PRODUCT_IMAGES_READ_WRITE_TOKEN
+  if (!blobToken) {
+    return NextResponse.json({ error: 'Product image storage is not configured.' }, { status: 503 })
+  }
+
   try {
     const form = await request.formData()
     const file = form.get('file')
@@ -27,9 +32,11 @@ export async function POST(request: Request) {
       addRandomSuffix: false,
       contentType: file.type,
       cacheControlMaxAge: 31536000,
+      token: blobToken,
     })
     return NextResponse.json({ url: blob.url })
-  } catch {
+  } catch (uploadError) {
+    console.error('[admin-upload] Blob upload failed:', uploadError)
     return NextResponse.json({ error: 'Image upload failed. Please try again.' }, { status: 500 })
   }
 }
