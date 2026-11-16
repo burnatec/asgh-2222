@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     }
     if (itemCount > 30) return NextResponse.json({ error: 'Your bag is over the 30 item limit.' }, { status: 400 })
 
-    const secret = process.env.PAYSTACK_SECRET_KEY
+    const secret = process.env.PAYSTACK_TEST_SECRET_KEY?.trim() || process.env.PAYSTACK_SECRET_KEY?.trim()
     if (!secret) return NextResponse.json({ error: 'Payments are not configured yet.' }, { status: 503 })
 
     const admin = serviceClient()

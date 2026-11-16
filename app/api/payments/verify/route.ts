@@ -13,7 +13,7 @@ function adminClient() {
 export async function GET(request: NextRequest) {
   const origin = process.env.APP_PUBLIC_URL || request.nextUrl.origin
   const reference = request.nextUrl.searchParams.get('reference') || request.nextUrl.searchParams.get('trxref')
-  const secret = process.env.PAYSTACK_SECRET_KEY
+  const secret = process.env.PAYSTACK_TEST_SECRET_KEY?.trim() || process.env.PAYSTACK_SECRET_KEY?.trim()
   if (!reference || !/^AFRO-[A-F0-9]{16}$/.test(reference) || !secret) {
     return NextResponse.redirect(new URL('/payment/failed', origin))
   }

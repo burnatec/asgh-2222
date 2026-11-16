@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic'
 
 const requiredVariables = [
   'NEXT_PUBLIC_SUPABASE_URL',
-  'PAYSTACK_SECRET_KEY',
   'RESEND_API_KEY',
   'RESEND_EMAIL_DOMAIN',
   'BLOB_READ_WRITE_TOKEN',
@@ -13,6 +12,9 @@ const requiredVariables = [
 
 export async function GET() {
   const missingEnvironmentVariables: string[] = requiredVariables.filter((name) => !process.env[name]?.trim())
+  const paystackKey = process.env.PAYSTACK_TEST_SECRET_KEY?.trim() || process.env.PAYSTACK_SECRET_KEY?.trim()
+  if (!paystackKey) missingEnvironmentVariables.push('PAYSTACK_TEST_SECRET_KEY or PAYSTACK_SECRET_KEY')
+
   const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
   const publishableKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
