@@ -22,10 +22,12 @@ const nextConfig = {
     if (!railwayOrigin) return []
 
     return {
-      beforeFiles: [{
-        source: '/api/:path*',
-        destination: `${railwayOrigin}/api/:path*`,
-      }],
+      beforeFiles: [
+        { source: '/api/admin', destination: `${railwayOrigin}/api/admin` },
+        { source: '/api/checkout', destination: `${railwayOrigin}/api/checkout` },
+        { source: '/api/health', destination: `${railwayOrigin}/api/health` },
+        { source: '/api/payments/verify', destination: `${railwayOrigin}/api/payments/verify` },
+      ],
     }
   },
 }
