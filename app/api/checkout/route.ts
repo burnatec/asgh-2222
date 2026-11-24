@@ -61,7 +61,15 @@ export async function POST(request: Request) {
     if (orderError?.message?.includes('shipping unavailable') || orderError?.message?.includes('pickup location')) {
       return NextResponse.json({ error: 'That delivery option is not available for your address. Please choose another.' }, { status: 409 })
     }
-    if (orderError || !orderRows?.[0]) return NextResponse.json({ error: 'One or more items are unavailable. Please refresh your bag.' }, { status: 409 })
+    if (orderError) {
+  console.error('[checkout] create_checkout_order failed', { code: orderError.code, message: orderError.message?.slice(0, 200) })
+  const message = orderError.message ?? ''
+  if (message.includes('product unavailable')) return NextResponse.json({ error: 'One or more items are out of stock or no longer available. Please refresh your bag.' }, { status: 409 })
+  if (message.includes('invalid quantit') || message.includes('duplicate product')) return NextResponse.json({ error: 'Your bag quantities are invalid. Please review your bag.' }, { status: 400 })
+  if (message.includes('invalid checkout request')) return NextResponse.json({ error: 'Check your delivery details and bag, then try again.' }, { status: 400 })
+  return NextResponse.json({ error: 'We could not create your order. Please try again.' }, { status: 500 })
+  }
+  if (!orderRows?.[0]) return NextResponse.json({ error: 'We could not create your order. Please try again.' }, { status: 500 })
     const order = orderRows[0] as { order_id: string; order_reference: string; total_ghs: number }
 
     const { data: existing } = await admin.from('orders').select('payment_status,payment_url').eq('id', order.order_id).eq('user_id', user.id).maybeSingle()
