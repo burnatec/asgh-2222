@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getPaystackSecret } from '@/lib/payments'
 
 export const runtime = 'nodejs'
 
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
     }
     if (itemCount > 30) return NextResponse.json({ error: 'Your bag is over the 30 item limit.' }, { status: 400 })
 
-    const secret = process.env.PAYSTACK_TEST_SECRET_KEY?.trim() || process.env.PAYSTACK_SECRET_KEY?.trim()
+    const secret = getPaystackSecret()
     if (!secret) return NextResponse.json({ error: 'Payments are not configured yet.' }, { status: 503 })
 
     const admin = serviceClient()
@@ -56,6 +57,15 @@ export async function POST(request: Request) {
     })
     if (orderError || !orderRows?.[0]) return NextResponse.json({ error: 'One or more items are unavailable. Please refresh your bag.' }, { status: 409 })
     const order = orderRows[0] as { order_id: string; order_reference: string; total_ghs: number }
+
+    const { data: existing } = await admin.from('orders').select('payment_status,payment_url').eq('id', order.order_id).eq('user_id', user.id).maybeSingle()
+    const origin = process.env.APP_PUBLIC_URL || new URL(request.url).origin
+    if (existing?.payment_status === 'paid') {
+      return NextResponse.json({ authorization_url: new URL(`/payment/success?reference=${encodeURIComponent(order.order_reference)}`, origin).toString(), reference: order.order_reference })
+    }
+    if (existing?.payment_url) {
+      return NextResponse.json({ authorization_url: existing.payment_url, reference: order.order_reference })
+    }
 
     const callbackOrigin = process.env.APP_PUBLIC_URL || new URL(request.url).origin
     const callbackUrl = new URL('/api/payments/verify', callbackOrigin).toString()
@@ -85,7 +95,7 @@ export async function POST(request: Request) {
       })
       return NextResponse.json({ error: 'We could not start payment. Please try again or contact support.' }, { status: 502 })
     }
-    await admin.from('orders').update({ payment_reference: order.order_reference }).eq('id', order.order_id).eq('user_id', user.id)
+    await admin.from('orders').update({ payment_reference: order.order_reference, payment_url: payment.data.authorization_url }).eq('id', order.order_id).eq('user_id', user.id)
     return NextResponse.json({ authorization_url: payment.data.authorization_url, reference: order.order_reference })
   } catch {
     return NextResponse.json({ error: 'Checkout could not be completed. Please try again.' }, { status: 500 })
