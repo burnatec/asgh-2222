@@ -44,14 +44,10 @@ const categoryItems = [
 const currency = (value: number) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 2 }).format(value)
 
 async function getProducts() {
-  try {
-    const supabase = createClient()
-    const { data, error } = await supabase.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,category,stock,featured').eq('active', true).order('featured', { ascending: false }).limit(24)
-    if (error) throw error
-    return data?.length ? data as Product[] : showcaseProducts
-  } catch {
-    return showcaseProducts
-  }
+  const supabase = createClient()
+  const { data, error } = await supabase.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,category,stock,featured').eq('active', true).order('featured', { ascending: false }).limit(24)
+  if (error) throw error
+  return data?.length ? data as Product[] : showcaseProducts
 }
 
 function Logo() {
@@ -74,7 +70,7 @@ function ProductCard({ product, addToCart }: { product: Product; addToCart: (pro
 }
 
 export function Storefront() {
-  const { data: products = showcaseProducts } = useSWR('store-products', getProducts, { revalidateOnFocus: false })
+  const { data: products = [] } = useSWR('store-products', getProducts, { revalidateOnFocus: false, shouldRetryOnError: true })
   const [cart, setCart] = useState<CartLine[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
