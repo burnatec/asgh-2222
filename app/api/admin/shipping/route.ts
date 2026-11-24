@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, serviceClient } from '@/lib/admin'
+import { requireStaff, serviceClient, writeAudit, type Permission } from '@/lib/admin'
 
 export const runtime = 'nodejs'
 
-const denied = () => NextResponse.json({ error: 'Administrator access required.' }, { status: 403 })
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value)
 const money = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100000
 const text = (value: unknown, max: number) => typeof value === 'string' && value.trim().length > 0 && value.length <= max
@@ -11,8 +10,14 @@ const list = (value: unknown): value is string[] => Array.isArray(value) && valu
 const clean = (values: string[]) => [...new Map(values.map((v) => v.trim()).filter(Boolean).map((v) => [v.toLowerCase(), v])).values()]
 const bad = (error = 'Check the fields and try again.') => NextResponse.json({ error }, { status: 400 })
 
+async function guard(permission: Permission) {
+  const result = await requireStaff(permission)
+  return result.staff ? { staff: result.staff, response: null } : { staff: null, response: NextResponse.json({ error: result.error }, { status: result.status }) }
+}
+
 export async function GET() {
-  if (!await requireAdmin()) return denied()
+  const access = await guard('orders:read')
+  if (access.response) return access.response
   try {
     const db = serviceClient()
     const [zones, methods, rates, pickups] = await Promise.all([
@@ -29,10 +34,12 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  if (!await requireAdmin()) return denied()
+  const access = await guard('settings:write')
+  if (access.response) return access.response
   try {
     const body = await request.json() as Record<string, unknown>
     const db = serviceClient()
+    await writeAudit(access.staff, 'shipping.update', 'shipping', typeof body.id === 'string' ? body.id : null, { kind: body.kind })
 
     if (body.kind === 'method') {
       const { min_days: min, max_days: max } = body
@@ -75,10 +82,12 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!await requireAdmin()) return denied()
+  const access = await guard('settings:write')
+  if (access.response) return access.response
   try {
     const body = await request.json() as Record<string, unknown>
     if (body.kind !== 'zone' || !uuid(body.id)) return bad()
+    await writeAudit(access.staff, 'shipping.zone.delete', 'shipping_zone', body.id)
     const db = serviceClient()
     const { data: zone } = await db.from('shipping_zones').select('is_fallback').eq('id', body.id).maybeSingle()
     if (!zone) return bad('Zone not found.')
@@ -92,9 +101,11 @@ export async function DELETE(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!await requireAdmin()) return denied()
+  const access = await guard('settings:write')
+  if (access.response) return access.response
   try {
     const body = await request.json() as Record<string, unknown>
+    await writeAudit(access.staff, 'shipping.create', 'shipping', null, { kind: body.kind ?? 'pickup' })
     if (body.kind === 'zone') {
       if (!text(body.name, 80) || !list(body.cities) || !list(body.regions)) return bad()
       const name = String(body.name).trim()

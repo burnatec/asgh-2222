@@ -2,13 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export type StaffRole = 'owner' | 'manager' | 'fulfilment' | 'content'
-export type Permission = 'orders:read' | 'orders:write' | 'products:read' | 'products:write' | 'customers:read' | 'staff:manage' | 'audit:read'
+export type Permission = 'orders:read' | 'orders:write' | 'products:read' | 'products:write' | 'customers:read' | 'staff:manage' | 'audit:read' | 'settings:write'
 
 export const STAFF_ROLES: StaffRole[] = ['owner', 'manager', 'fulfilment', 'content']
 
 const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
-  owner: ['orders:read', 'orders:write', 'products:read', 'products:write', 'customers:read', 'staff:manage', 'audit:read'],
-  manager: ['orders:read', 'orders:write', 'products:read', 'products:write', 'customers:read', 'audit:read'],
+  owner: ['orders:read', 'orders:write', 'products:read', 'products:write', 'customers:read', 'staff:manage', 'audit:read', 'settings:write'],
+  manager: ['orders:read', 'orders:write', 'products:read', 'products:write', 'customers:read', 'audit:read', 'settings:write'],
   fulfilment: ['orders:read', 'orders:write', 'products:read'],
   content: ['products:read', 'products:write'],
 }
