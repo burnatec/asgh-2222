@@ -12,8 +12,9 @@ const requiredVariables = [
 
 export async function GET() {
   const missingEnvironmentVariables: string[] = requiredVariables.filter((name) => !process.env[name]?.trim())
-  const paystackKey = process.env.PAYSTACK_TEST_SECRET_KEY?.trim() || process.env.PAYSTACK_SECRET_KEY?.trim()
-  if (!paystackKey) missingEnvironmentVariables.push('PAYSTACK_TEST_SECRET_KEY or PAYSTACK_SECRET_KEY')
+  const paystackKey = process.env.PAYSTACK_SECRET_KEY?.trim()
+  if (!paystackKey) missingEnvironmentVariables.push('PAYSTACK_SECRET_KEY')
+  const paystackMode = !paystackKey ? 'missing' : paystackKey.startsWith('sk_live_') ? 'live' : 'test'
 
   const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
   const publishableKey =
@@ -63,6 +64,7 @@ export async function GET() {
     checks: {
       configuration: missingEnvironmentVariables.length === 0 ? 'ok' : 'incomplete',
       database,
+      paystack: paystackMode,
     },
     ...(missingEnvironmentVariables.length > 0 ? { missingEnvironmentVariables } : {}),
   }, { status: ready ? 200 : 503 })
