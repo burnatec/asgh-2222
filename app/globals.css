@@ -353,3 +353,21 @@ a { color: inherit; text-decoration: none; }
 .variant-product-select { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #555555; max-width: 320px; }
 .variant-product-select select { padding: 9px; border: 1px solid #e5e5e5; background: #ffffff; }
 @media (max-width: 720px) { .product-modal-grid { grid-template-columns: 1fr; } .product-modal { padding: 24px 18px; } }
+
+.product-gallery { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.product-thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.product-thumbs button { width: 56px; height: 56px; padding: 0; border: 1px solid #e5e5e5; background: #ffffff; cursor: pointer; opacity: 0.7; }
+.product-thumbs button.thumb-active, .product-thumbs button:hover { opacity: 1; border-color: #000000; }
+.product-thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.admin-gallery-field { display: flex; flex-direction: column; gap: 8px; }
+.admin-gallery-label { color: #555555; font-size: 9px; }
+.admin-gallery { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.admin-gallery li { position: relative; border: 1px solid #e5e5e5; background: #ffffff; }
+.admin-gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.admin-gallery-primary { position: absolute; top: 4px; left: 4px; padding: 2px 5px; background: #000000; color: #ffffff; font-size: 8px; font-weight: 600; }
+.admin-gallery-actions { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; }
+.admin-gallery-actions button { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 4px; border: 1px solid #e5e5e5; background: #ffffff; font-size: 9px; cursor: pointer; }
+.admin-gallery-actions button:disabled { opacity: 0.35; cursor: default; }
+.admin-gallery-url { display: flex; gap: 6px; }
+.admin-gallery-url input { flex: 1; min-width: 0; }
+.admin-gallery-url button { padding: 0 12px; border: 1px solid #000000; background: #ffffff; font-size: 10px; cursor: pointer; }

@@ -17,6 +17,7 @@ type Product = {
   price_ghs: number
   compare_at_price_ghs?: number | null
   image_url: string
+  images?: string[] | null
   category: string
   stock?: number
   featured?: boolean
@@ -50,7 +51,7 @@ const currency = (value: number) => new Intl.NumberFormat('en-GH', { style: 'cur
 
 async function getProducts() {
   const supabase = createClient()
-  const { data, error } = await supabase.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,category,stock,featured,product_variants(id,label,price_ghs,stock,active)').eq('active', true).order('featured', { ascending: false }).limit(24)
+  const { data, error } = await supabase.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,images,category,stock,featured,product_variants(id,label,price_ghs,stock,active)').eq('active', true).order('featured', { ascending: false }).limit(24)
   if (error) throw error
   return data?.length ? data as Product[] : showcaseProducts
 }

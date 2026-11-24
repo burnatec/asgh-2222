@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { Heart, Plus, Star, X } from 'lucide-react'
 
 export type Variant = { id: string; label: string; price_ghs: number | null; stock: number; active: boolean }
-export type ModalProduct = { id: string; name: string; description?: string; price_ghs: number; image_url: string; category: string; stock?: number; product_variants?: Variant[] }
+export type ModalProduct = { id: string; name: string; description?: string; price_ghs: number; image_url: string; images?: string[] | null; category: string; stock?: number; product_variants?: Variant[] }
 type ReviewsResponse = { reviews: { id: string; author_name: string; rating: number; title: string | null; body: string; verified_purchase: boolean; created_at: string }[]; average: number; count: number }
 
 const money = (value: number) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(value)
@@ -23,6 +23,8 @@ export function ProductModal({ product, saved, onToggleSave, onAdd, onClose, onA
   product: ModalProduct; saved: boolean; onToggleSave: () => void; onAdd: (variant?: Variant) => void; onClose: () => void; onAuthRequired: () => void
 }) {
   const variants = (product.product_variants ?? []).filter((v) => v.active)
+  const gallery = product.images?.length ? product.images : [product.image_url || '/placeholder.svg']
+  const [activeImage, setActiveImage] = useState(0)
   const [variantId, setVariantId] = useState('')
   const variant = variants.find((v) => v.id === variantId)
   const price = variant?.price_ghs ?? product.price_ghs
@@ -51,7 +53,18 @@ export function ProductModal({ product, saved, onToggleSave, onAdd, onClose, onA
       <section className="product-modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
         <button className="icon-button account-close" aria-label="Close product" onClick={onClose}><X size={19} /></button>
         <div className="product-modal-grid">
-          <img src={product.image_url || '/placeholder.svg'} alt={product.name} className="product-modal-image" />
+          <div className="product-gallery">
+            <img src={gallery[activeImage] ?? gallery[0]} alt={`${product.name}, image ${activeImage + 1} of ${gallery.length}`} className="product-modal-image" />
+            {gallery.length > 1 && (
+              <div className="product-thumbs" role="group" aria-label="Product images">
+                {gallery.map((url, index) => (
+                  <button type="button" key={url} aria-label={`Show image ${index + 1}`} aria-pressed={index === activeImage} className={index === activeImage ? 'thumb-active' : ''} onClick={() => setActiveImage(index)}>
+                    <img src={url} alt="" loading="lazy" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="product-modal-copy">
             <span className="eyebrow">{product.category.toUpperCase()}</span>
             <h2 id="product-modal-title">{product.name}</h2>

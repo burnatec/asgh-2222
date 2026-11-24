@@ -9,12 +9,21 @@ async function guard(permission: Permission) {
   return result.staff ? { staff: result.staff, response: null } : { staff: null, response: NextResponse.json({ error: result.error }, { status: result.status }) }
 }
 
+const MAX_PRODUCT_IMAGES = 8
+
+function productImages(data: Record<string, unknown>): string[] | null {
+  const raw = Array.isArray(data.images) ? data.images : typeof data.image_url === 'string' && data.image_url ? [data.image_url] : []
+  const unique = [...new Set(raw)]
+  if (unique.length < 1 || unique.length > MAX_PRODUCT_IMAGES) return null
+  return unique.every((url) => typeof url === 'string' && url.startsWith('https://') && url.length <= 1000) ? (unique as string[]) : null
+}
+
 function validProduct(data: Record<string, unknown>) {
   return typeof data.name === 'string' && data.name.trim().length > 1 && data.name.length <= 120
     && typeof data.description === 'string' && data.description.length <= 2000
     && typeof data.price_ghs === 'number' && Number.isFinite(data.price_ghs) && data.price_ghs > 0 && data.price_ghs <= 100000
     && (data.compare_at_price_ghs === null || data.compare_at_price_ghs === undefined || (typeof data.compare_at_price_ghs === 'number' && data.compare_at_price_ghs > data.price_ghs))
-    && typeof data.image_url === 'string' && data.image_url.startsWith('https://') && data.image_url.length <= 1000
+    && productImages(data) !== null
     && typeof data.category === 'string' && data.category.length <= 60
     && Number.isInteger(data.stock) && (data.stock as number) >= 0 && (data.stock as number) <= 100000
 }
@@ -26,7 +35,7 @@ export async function GET() {
     const admin = serviceClient()
     const empty = Promise.resolve({ data: [] as never[], error: null })
     const [productsResult, ordersResult, customersResult, categoriesResult] = await Promise.all([
-      can(staff.role, 'products:read') ? admin.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,category,stock,featured,active,created_at').order('created_at', { ascending: false }).limit(100) : empty,
+      can(staff.role, 'products:read') ? admin.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,images,category,stock,featured,active,created_at').order('created_at', { ascending: false }).limit(100) : empty,
       can(staff.role, 'orders:read') ? admin.from('orders').select('id,reference,user_id,status,payment_status,total_ghs,created_at,shipping_details,carrier,tracking_number,shipping_method_name').order('created_at', { ascending: false }).limit(100) : empty,
       can(staff.role, 'customers:read') ? admin.from('profiles').select('id,full_name,created_at').order('created_at', { ascending: false }).limit(100) : empty,
       admin.from('categories').select('id,name,slug,sort_order,active').order('sort_order'),
@@ -63,7 +72,8 @@ export async function POST(request: Request) {
       description: String(product.description),
       price_ghs: Number(product.price_ghs),
       compare_at_price_ghs: product.compare_at_price_ghs ?? null,
-      image_url: String(product.image_url),
+      image_url: productImages(product)![0],
+      images: productImages(product),
       category: String(product.category),
       stock: Number(product.stock),
       featured: product.featured === true,
@@ -139,7 +149,7 @@ export async function PATCH(request: Request) {
       const { id: _id, kind: _kind, ...fields } = body
       const slug = String(fields.name).trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       const { data: before } = await admin.from('products').select('stock,price_ghs,active').eq('id', body.id).maybeSingle()
-      const { error } = await admin.from('products').update({ ...fields, slug }).eq('id', body.id)
+      const { error } = await admin.from('products').update({ ...fields, slug, image_url: productImages(body)![0], images: productImages(body) }).eq('id', body.id)
       if (error) return NextResponse.json({ error: 'Could not update the product.' }, { status: 400 })
       const newStock = Number(fields.stock)
       if (before && before.stock !== newStock) await admin.from('inventory_logs').insert({ product_id: body.id, delta: newStock - before.stock, stock_after: newStock, reason: 'Manual adjustment', actor_id: staff.id })
