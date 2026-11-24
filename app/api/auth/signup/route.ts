@@ -31,19 +31,30 @@ export async function POST(request: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
 
-  const { data, error } = await admin.auth.admin.generateLink({
+  let linkType: 'signup' | 'magiclink' = 'signup'
+  let { data, error } = await admin.auth.admin.generateLink({
     type: 'signup',
     email,
     password,
     options: { data: { full_name: fullName } },
   })
 
-  // Do not reveal whether an address is already registered.
   if (error || !data?.properties?.hashed_token) {
-    return NextResponse.json({ ok: true })
+    console.log('[v0] signup generateLink failed:', error?.message)
+    // The address may belong to an earlier signup that was never confirmed; re-send a confirmation link for it.
+    const retry = await admin.auth.admin.generateLink({ type: 'magiclink', email })
+    const existing = retry.data?.user
+    if (retry.error || !retry.data?.properties?.hashed_token || !existing || existing.email_confirmed_at) {
+      // Do not reveal whether an address is already registered.
+      return NextResponse.json({ ok: true })
+    }
+    await admin.auth.admin.updateUserById(existing.id, { password, user_metadata: { full_name: fullName } })
+    linkType = 'magiclink'
+    data = retry.data
+    error = null
   }
 
-  const link = `${request.nextUrl.origin}/auth/confirm?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=signup&next=/account`
+  const link = `${request.nextUrl.origin}/auth/confirm?token_hash=${encodeURIComponent(data!.properties.hashed_token)}&type=${linkType}&next=/account`
   const name = escapeHtml(fullName || 'there')
 
   const { error: sendError } = await new Resend(apiKey).emails.send({
@@ -56,6 +67,7 @@ export async function POST(request: NextRequest) {
   })
 
   if (sendError) {
+    console.log('[v0] resend send failed:', sendError.message)
     return NextResponse.json({ error: 'We could not send the confirmation email. Please try again shortly.' }, { status: 502 })
   }
   return NextResponse.json({ ok: true })

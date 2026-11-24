@@ -8,9 +8,9 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/'
   const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/'
 
-  if (tokenHash && type === 'signup') {
+  if (tokenHash && (type === 'signup' || type === 'magiclink')) {
     const supabase = await createServerSupabaseClient()
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'signup' })
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
     if (!error) return NextResponse.redirect(`${origin}${safeNext}`)
   }
   return NextResponse.redirect(`${origin}/?auth=error`)
