@@ -28,16 +28,17 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
 
     try {
       if (mode === 'sign-up') {
-        const { error: authError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { emailRedirectTo: redirectTo, data: { full_name: fullName.trim() } },
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password, fullName: fullName.trim() }),
         })
-        if (authError) {
-          setError(authError.message.toLowerCase().includes('password') ? 'Please choose a stronger password and try again.' : 'We could not create your account with those details. Please check and try again.')
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          setError(result.error ?? 'We could not create your account with those details. Please check and try again.')
           return
         }
-        setMessage('Check your inbox for a link to confirm your account.')
+        setMessage('Check your inbox (and spam folder) for a link to confirm your account.')
       } else if (mode === 'reset') {
         const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${redirectTo}?next=/auth/reset-password` })
         if (authError) setError('We could not send a reset link right now. Please try again later.')
