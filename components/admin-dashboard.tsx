@@ -5,6 +5,7 @@ import useSWR from 'swr'
 import { ArrowLeft, Box, CircleDollarSign, ImagePlus, PackageCheck, Plus, ShieldAlert, Users } from 'lucide-react'
 import Link from 'next/link'
 import { AdminOrderStatus } from '@/components/admin-order-status'
+import { AdminAnalyticsPanel, AdminCouponsPanel, AdminReviewsPanel, AdminVariantsPanel } from '@/components/admin-commerce-panel'
 import { AdminActivityPanel, AdminCategoriesPanel, AdminStaffPanel, type Category } from '@/components/admin-team-panel'
 
 type Product = { id: string; name: string; description: string; price_ghs: number; compare_at_price_ghs: number | null; image_url: string; category: string; stock: number; featured: boolean; active: boolean }
@@ -76,6 +77,10 @@ export function AdminDashboard() {
           </section>}
           <section className="admin-panel admin-products"><div className="admin-panel-heading"><div><h2>Inventory</h2><p>Active catalogue and on-hand stock.</p></div><span>{data.products.filter((product) => product.active).length} active</span></div><div className="inventory-list">{data.products.map((product) => <article key={product.id} className={!product.active ? 'inventory-archived' : ''}><img src={product.image_url} alt="" /><div><strong>{product.name}</strong><span>{product.category} · {money(Number(product.price_ghs))}</span></div><b className={product.stock <= 5 ? 'stock-low' : ''}>{product.stock} in stock</b>{product.active && data.me.permissions.includes('products:write') && <div className="inventory-actions"><button onClick={() => { setEditingId(product.id); setForm({ name: product.name, description: product.description, price_ghs: String(product.price_ghs), compare_at_price_ghs: product.compare_at_price_ghs ? String(product.compare_at_price_ghs) : '', image_url: product.image_url, category: product.category, stock: String(product.stock), featured: product.featured }) }}>Edit</button><button onClick={() => archiveProduct(product.id)}>Archive</button></div>}</article>)}</div></section>
           {data.me.permissions.includes('customers:read') && <section className="admin-panel admin-customers"><div className="admin-panel-heading"><div><h2>Customers</h2><p>Recently registered accounts.</p></div><Users size={17} /></div><div className="customer-list">{data.customers.map((customer) => <article key={customer.id}><span className="customer-avatar">{(customer.full_name || 'C').slice(0, 1).toUpperCase()}</span><div><strong>{customer.full_name || 'Customer'}</strong><small>Joined {new Date(customer.created_at).toLocaleDateString('en-GH')}</small></div></article>)}</div></section>}
+          {data.me.permissions.includes('orders:read') && <AdminAnalyticsPanel />}
+          {data.me.permissions.includes('products:write') && <AdminVariantsPanel products={data.products} onNotice={setNotice} />}
+          {data.me.permissions.includes('products:read') && <AdminReviewsPanel canModerate={data.me.permissions.includes('products:write')} onNotice={setNotice} />}
+          {data.me.permissions.includes('settings:write') && <AdminCouponsPanel onNotice={setNotice} />}
           {data.me.permissions.includes('products:write') && <AdminCategoriesPanel categories={data.categories} onChanged={() => void mutate()} onNotice={setNotice} />}
           {data.me.permissions.includes('staff:manage') && <AdminStaffPanel currentEmail={data.me.email} onNotice={setNotice} />}
           {data.me.permissions.includes('audit:read') && <AdminActivityPanel />}

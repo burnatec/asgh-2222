@@ -27,7 +27,8 @@ export async function POST(request: Request) {
 
     const body: unknown = await request.json()
     if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid checkout request.' }, { status: 400 })
-    const { items, shipping, idempotencyKey, shippingMethod, pickupLocationId } = body as Record<string, unknown>
+    const { items, shipping, idempotencyKey, shippingMethod, pickupLocationId, couponCode } = body as Record<string, unknown>
+    const coupon = typeof couponCode === 'string' && couponCode.trim() ? couponCode.trim().toUpperCase().slice(0, 40) : null
     const validPickup = pickupLocationId == null || (typeof pickupLocationId === 'string' && /^[0-9a-f-]{36}$/i.test(pickupLocationId))
     if (!Array.isArray(items) || !items.length || items.length > 20 || !validShipping(shipping) || typeof idempotencyKey !== 'string' || !/^[0-9a-f-]{36}$/i.test(idempotencyKey) || typeof shippingMethod !== 'string' || !/^[a-z_]{2,40}$/.test(shippingMethod) || !validPickup) {
       return NextResponse.json({ error: 'Check your delivery details and bag, then try again.' }, { status: 400 })
@@ -38,10 +39,12 @@ export async function POST(request: Request) {
     for (const item of items) {
       if (!item || typeof item !== 'object') return NextResponse.json({ error: 'Invalid bag items.' }, { status: 400 })
       const value = item as Record<string, unknown>
-      if (typeof value.product_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.product_id) || !Number.isInteger(value.quantity) || (value.quantity as number) < 1 || (value.quantity as number) > 20 || seen.has(value.product_id)) {
+      const variantOk = value.variant_id == null || (typeof value.variant_id === 'string' && /^[0-9a-f-]{36}$/i.test(value.variant_id))
+      const key = `${value.product_id}:${value.variant_id ?? ''}`
+      if (typeof value.product_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.product_id) || !variantOk || !Number.isInteger(value.quantity) || (value.quantity as number) < 1 || (value.quantity as number) > 20 || seen.has(key)) {
         return NextResponse.json({ error: 'Invalid bag items.' }, { status: 400 })
       }
-      seen.add(value.product_id)
+      seen.add(key)
       itemCount += value.quantity as number
     }
     if (itemCount > 30) return NextResponse.json({ error: 'Your bag is over the 30 item limit.' }, { status: 400 })
@@ -57,6 +60,7 @@ export async function POST(request: Request) {
       p_shipping: shipping,
       p_method: shippingMethod,
       p_pickup_location_id: pickupLocationId ?? null,
+      p_coupon_code: coupon,
     })
     if (orderError?.message?.includes('shipping unavailable') || orderError?.message?.includes('pickup location')) {
       return NextResponse.json({ error: 'That delivery option is not available for your address. Please choose another.' }, { status: 409 })
@@ -64,6 +68,10 @@ export async function POST(request: Request) {
     if (orderError) {
   console.error('[checkout] create_checkout_order failed', { code: orderError.code, message: orderError.message?.slice(0, 200) })
   const message = orderError.message ?? ''
+  if (message.includes('coupon invalid')) return NextResponse.json({ error: 'That coupon code is invalid or has expired.' }, { status: 422 })
+  if (message.includes('coupon minimum')) return NextResponse.json({ error: 'Your bag does not meet the minimum spend for that coupon.' }, { status: 422 })
+  if (message.includes('coupon already used')) return NextResponse.json({ error: 'You have already used that coupon.' }, { status: 422 })
+  if (message.includes('variant required')) return NextResponse.json({ error: 'Please choose an option for each product with variants.' }, { status: 409 })
   if (message.includes('product unavailable')) return NextResponse.json({ error: 'One or more items are out of stock or no longer available. Please refresh your bag.' }, { status: 409 })
   if (message.includes('invalid quantit') || message.includes('duplicate product')) return NextResponse.json({ error: 'Your bag quantities are invalid. Please review your bag.' }, { status: 400 })
   if (message.includes('invalid checkout request')) return NextResponse.json({ error: 'Check your delivery details and bag, then try again.' }, { status: 400 })

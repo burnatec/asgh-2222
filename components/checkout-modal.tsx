@@ -4,7 +4,7 @@ import { FormEvent, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 
-type CheckoutItem = { product_id: string; quantity: number }
+type CheckoutItem = { product_id: string; variant_id?: string; quantity: number }
 type ShippingOption = { method_code: string; method_name: string; description: string; fee_ghs: number; min_days: number; max_days: number; unit: 'hours' | 'business_days'; requires_pickup: boolean }
 type PickupLocation = { id: string; name: string; address: string; city: string }
 type OptionsResponse = { options: ShippingOption[]; pickup_locations: PickupLocation[] }
@@ -32,6 +32,9 @@ export function CheckoutModal({ items, total, onClose, onAuthRequired }: { items
   const [pickupId, setPickupId] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [couponInput, setCouponInput] = useState('')
+  const [coupon, setCoupon] = useState<{ code: string; discount: number; description: string } | null>(null)
+  const [couponMessage, setCouponMessage] = useState('')
   const idempotencyKey = useRef<string | null>(null)
   const keySignature = useRef('')
 
@@ -49,6 +52,16 @@ export function CheckoutModal({ items, total, onClose, onAuthRequired }: { items
   const shippingFee = selected?.fee_ghs ?? 0
   const canSubmit = Boolean(selected) && (!needsPickup || Boolean(selectedPickup))
 
+  async function applyCoupon() {
+    setCouponMessage('')
+    const response = await fetch('/api/coupons/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: couponInput, subtotal: total }) })
+    const result = await response.json().catch(() => ({}))
+    if (response.status === 401) { onAuthRequired(); return }
+    if (!response.ok) { setCoupon(null); setCouponMessage(result.error || 'Could not apply coupon.'); return }
+    setCoupon(result)
+    setCouponMessage(`${result.code} applied: ${result.description}`)
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selected) {
@@ -58,7 +71,7 @@ export function CheckoutModal({ items, total, onClose, onAuthRequired }: { items
     setError('')
     setLoading(true)
     try {
-      const signature = JSON.stringify([items, selectedMethod, needsPickup ? selectedPickup : null, form.city, form.region])
+      const signature = JSON.stringify([items, selectedMethod, needsPickup ? selectedPickup : null, form.city, form.region, coupon?.code ?? null])
       if (keySignature.current !== signature) {
         keySignature.current = signature
         idempotencyKey.current = crypto.randomUUID()
@@ -71,6 +84,7 @@ export function CheckoutModal({ items, total, onClose, onAuthRequired }: { items
           shipping: form,
           idempotencyKey: idempotencyKey.current,
           shippingMethod: selectedMethod,
+          couponCode: coupon?.code ?? null,
           pickupLocationId: needsPickup ? selectedPickup : null,
         }),
       })
@@ -124,8 +138,14 @@ export function CheckoutModal({ items, total, onClose, onAuthRequired }: { items
               </select>
             </label>
           )}
+          <div className="coupon-field">
+            <label>Coupon code<input value={couponInput} maxLength={40} onChange={(event) => { setCouponInput(event.target.value.toUpperCase()); setCoupon(null); setCouponMessage('') }} placeholder="Have a code?" /></label>
+            <button type="button" className="button-outline" disabled={!couponInput.trim()} onClick={applyCoupon}>Apply</button>
+          </div>
+          {couponMessage && <p className={coupon ? 'coupon-ok' : 'form-error'} role="status">{couponMessage}</p>}
           {error && <p className="form-error" role="alert">{error}</p>}
-          <div className="checkout-total"><span>Total including delivery</span><strong>{money(total + shippingFee)}</strong></div>
+          {coupon && <div className="checkout-total"><span>Discount ({coupon.code})</span><strong>-{money(coupon.discount)}</strong></div>}
+          <div className="checkout-total"><span>Total including delivery</span><strong>{money(total - (coupon?.discount ?? 0) + shippingFee)}</strong></div>
           <button className="button-primary account-submit" disabled={loading || !canSubmit}>{loading ? 'Preparing secure payment…' : 'Continue to payment'} <ArrowRight size={15} /></button>
         </form>
         <p className="checkout-terms">By continuing, you agree to our terms and delivery policy.</p>

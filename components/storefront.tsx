@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { AccountModal } from '@/components/account-modal'
 import { SocialMark } from '@/components/social-mark'
 import { CheckoutModal } from '@/components/checkout-modal'
+import { ProductModal, type Variant } from '@/components/product-modal'
 
 type Product = {
   id: string
@@ -19,9 +20,13 @@ type Product = {
   category: string
   stock?: number
   featured?: boolean
+  product_variants?: Variant[]
 }
 
-type CartLine = { product: Product; quantity: number }
+type CartLine = { product: Product; variant?: Variant; quantity: number }
+
+const lineKey = (line: { product: Product; variant?: Variant }) => `${line.product.id}:${line.variant?.id ?? ''}`
+const linePrice = (line: { product: Product; variant?: Variant }) => line.variant?.price_ghs ?? line.product.price_ghs
 
 const showcaseProducts: Product[] = [
   { id: 'shito', name: 'Grandma’s Shito', description: 'Slow-cooked pepper sauce with a deep, smoky finish.', price_ghs: 48, compare_at_price_ghs: 58, image_url: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=85', category: 'Pantry', featured: true },
@@ -45,7 +50,7 @@ const currency = (value: number) => new Intl.NumberFormat('en-GH', { style: 'cur
 
 async function getProducts() {
   const supabase = createClient()
-  const { data, error } = await supabase.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,category,stock,featured').eq('active', true).order('featured', { ascending: false }).limit(24)
+  const { data, error } = await supabase.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,category,stock,featured,product_variants(id,label,price_ghs,stock,active)').eq('active', true).order('featured', { ascending: false }).limit(24)
   if (error) throw error
   return data?.length ? data as Product[] : showcaseProducts
 }
@@ -54,15 +59,15 @@ function Logo() {
   return <a href="#top" className="brand" aria-label="Afro Superstore home"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-BntWL9FJ4tCF0xmRtGmE95PGUW6bZl.png" alt="" className="brand-logo" /></a>
 }
 
-function ProductCard({ product, addToCart }: { product: Product; addToCart: (product: Product) => void }) {
-  const [saved, setSaved] = useState(false)
+function ProductCard({ product, saved, onToggleSave, onOpen, addToCart }: { product: Product; saved: boolean; onToggleSave: () => void; onOpen: () => void; addToCart: (product: Product) => void }) {
+  const hasVariants = (product.product_variants ?? []).some((variant) => variant.active)
   return (
     <article className="product-card">
       <div className="product-image-wrap">
-        <img src={product.image_url || '/placeholder.svg'} alt={product.name} className="product-image" loading="lazy" />
+        <button className="product-open" aria-label={`View ${product.name}`} onClick={onOpen}><img src={product.image_url || '/placeholder.svg'} alt={product.name} className="product-image" loading="lazy" /></button>
         {product.compare_at_price_ghs && <span className="product-tag">Bestseller</span>}
-        <button className={`save-button ${saved ? 'is-saved' : ''}`} aria-label={saved ? `Remove ${product.name} from favourites` : `Save ${product.name} to favourites`} onClick={() => setSaved(!saved)}><Heart size={17} fill={saved ? 'currentColor' : 'none'} /></button>
-        <button className="quick-add" onClick={() => addToCart(product)}><Plus size={15} /> Add to bag</button>
+        <button className={`save-button ${saved ? 'is-saved' : ''}`} aria-pressed={saved} aria-label={saved ? `Remove ${product.name} from favourites` : `Save ${product.name} to favourites`} onClick={onToggleSave}><Heart size={17} fill={saved ? 'currentColor' : 'none'} /></button>
+        <button className="quick-add" onClick={() => (hasVariants ? onOpen() : addToCart(product))}><Plus size={15} /> {hasVariants ? 'Choose options' : 'Add to bag'}</button>
       </div>
       <div className="product-info"><div className="product-title-line"><h3>{product.name}</h3><span className="product-price">{currency(product.price_ghs)}</span></div><p>{product.description || product.category}</p><span className="product-category">{product.category}</span></div>
     </article>
@@ -80,22 +85,34 @@ export function Storefront() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const [openProductId, setOpenProductId] = useState<string | null>(null)
+  const { data: wishlist, mutate: mutateWishlist } = useSWR<{ items: { product_id: string }[] }>('/api/wishlist', async (url: string) => (await fetch(url)).json(), { revalidateOnFocus: false })
+  const savedIds = useMemo(() => new Set((wishlist?.items ?? []).map((item) => item.product_id)), [wishlist])
+  const openProduct = products.find((item) => item.id === openProductId)
+
+  async function toggleSave(product: Product) {
+    const saved = savedIds.has(product.id)
+    const response = saved ? await fetch(`/api/wishlist?productId=${product.id}`, { method: 'DELETE' }) : await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId: product.id }) })
+    if (response.status === 401) { setOpenProductId(null); setAccountOpen(true); return }
+    if (response.ok) { setNotice(saved ? 'Removed from your wishlist' : 'Saved to your wishlist'); window.setTimeout(() => setNotice(''), 2400); void mutateWishlist() }
+  }
 
   const filteredProducts = useMemo(() => products.filter((item) => (activeCategory === 'All' || item.category === activeCategory) && `${item.name} ${item.category} ${item.description}`.toLowerCase().includes(search.toLowerCase())), [products, activeCategory, search])
   const cartCount = cart.reduce((total, line) => total + line.quantity, 0)
-  const subtotal = cart.reduce((total, line) => total + line.product.price_ghs * line.quantity, 0)
+  const subtotal = cart.reduce((total, line) => total + linePrice(line) * line.quantity, 0)
 
-  function addToCart(product: Product) {
+  function addToCart(product: Product, variant?: Variant) {
+    const key = lineKey({ product, variant })
     setCart((current) => {
-      const existing = current.find((line) => line.product.id === product.id)
-      return existing ? current.map((line) => line.product.id === product.id ? { ...line, quantity: line.quantity + 1 } : line) : [...current, { product, quantity: 1 }]
+      const existing = current.find((line) => lineKey(line) === key)
+      return existing ? current.map((line) => lineKey(line) === key ? { ...line, quantity: line.quantity + 1 } : line) : [...current, { product, variant, quantity: 1 }]
     })
     setNotice(`${product.name} added to your bag`)
     window.setTimeout(() => setNotice(''), 2400)
   }
 
-  function updateQuantity(productId: string, delta: number) {
-    setCart((current) => current.map((line) => line.product.id === productId ? { ...line, quantity: Math.max(0, line.quantity + delta) } : line).filter((line) => line.quantity > 0))
+  function updateQuantity(key: string, delta: number) {
+    setCart((current) => current.map((line) => lineKey(line) === key ? { ...line, quantity: Math.max(0, line.quantity + delta) } : line).filter((line) => line.quantity > 0))
   }
 
   function chooseCategory(category: string) {
@@ -128,7 +145,7 @@ export function Storefront() {
 
       <section className="category-section content-width" aria-labelledby="category-title"><div className="section-heading"><div><span className="eyebrow">A GOOD PLACE TO START</span><h2 id="category-title">Find your kind of <em>good.</em></h2></div><button className="text-link" onClick={() => chooseCategory('All')}>Explore all categories <ArrowUpRight size={16} /></button></div><div className="category-grid">{categoryItems.map((category, index) => <button key={category.name} className={`category-card category-${category.tone}`} onClick={() => chooseCategory(category.name)}><img src={category.image} alt="" loading="lazy" /><span className="category-index">0{index + 1}</span><span className="category-copy"><strong>{category.name}</strong><small>{category.caption}</small></span><span className="category-arrow"><ArrowUpRight size={18} /></span></button>)}</div></section>
 
-      <section className="products-section" id="shop" aria-labelledby="shop-title"><div className="content-width"><div className="section-heading products-heading"><div><span className="eyebrow">THE AFRO EDIT</span><h2 id="shop-title">Good things, <em>gathered.</em></h2><p className="section-subtitle">A few favourites to make your everyday feel a little more special.</p></div><a className="text-link desktop-link" href="#shop">Shop all products <ArrowUpRight size={16} /></a></div><div className="filters-row"><div className="category-filters" aria-label="Filter by category">{['All', 'Pantry', 'Beauty', 'Home', 'Accessories'].map((category) => <button key={category} className={activeCategory === category ? 'filter-active' : ''} onClick={() => setActiveCategory(category)}>{category}</button>)}</div><button className="sort-button">Featured <ChevronDown size={15} /></button></div><div className="product-grid">{filteredProducts.slice(0, 8).map((product) => <ProductCard key={product.id} product={product} addToCart={addToCart} />)}</div>{filteredProducts.length === 0 && <div className="no-results"><Search size={22} /><strong>No good things found just yet.</strong><span>Try another search or browse all products.</span><button onClick={() => { setSearch(''); setActiveCategory('All') }}>Clear filters</button></div>}<div className="mobile-all"><button className="button-outline" onClick={() => { setActiveCategory('All'); setSearch('') }}>Explore all products <ArrowRight size={15} /></button></div></div></section>
+      <section className="products-section" id="shop" aria-labelledby="shop-title"><div className="content-width"><div className="section-heading products-heading"><div><span className="eyebrow">THE AFRO EDIT</span><h2 id="shop-title">Good things, <em>gathered.</em></h2><p className="section-subtitle">A few favourites to make your everyday feel a little more special.</p></div><a className="text-link desktop-link" href="#shop">Shop all products <ArrowUpRight size={16} /></a></div><div className="filters-row"><div className="category-filters" aria-label="Filter by category">{['All', 'Pantry', 'Beauty', 'Home', 'Accessories'].map((category) => <button key={category} className={activeCategory === category ? 'filter-active' : ''} onClick={() => setActiveCategory(category)}>{category}</button>)}</div><button className="sort-button">Featured <ChevronDown size={15} /></button></div><div className="product-grid">{filteredProducts.slice(0, 8).map((product) => <ProductCard key={product.id} product={product} saved={savedIds.has(product.id)} onToggleSave={() => void toggleSave(product)} onOpen={() => setOpenProductId(product.id)} addToCart={(item) => addToCart(item)} />)}</div>{filteredProducts.length === 0 && <div className="no-results"><Search size={22} /><strong>No good things found just yet.</strong><span>Try another search or browse all products.</span><button onClick={() => { setSearch(''); setActiveCategory('All') }}>Clear filters</button></div>}<div className="mobile-all"><button className="button-outline" onClick={() => { setActiveCategory('All'); setSearch('') }}>Explore all products <ArrowRight size={15} /></button></div></div></section>
 
       <section className="story-section content-width"><div className="story-photo"><img src="https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1200&q=85" alt="A welcoming table set with food to share" loading="lazy" /><div className="story-sticker"><span>From</span><strong>Ghana</strong><small>with love</small></div></div><div className="story-copy"><span className="eyebrow">A LITTLE ABOUT US</span><h2>Good things grow<br />when we <em>grow together.</em></h2><p>We bring together the makers, growers and small businesses shaping modern Ghana — so you can discover their work, wherever home is.</p><a className="text-link" href="/our-story">Get to know us <ArrowUpRight size={16} /></a><div className="story-stats"><div><strong>100<span>+</span></strong><small>local makers</small></div><div><strong>16</strong><small>regions, one home</small></div><div><strong>2k<span>+</span></strong><small>happy customers</small></div></div></div></section>
 
@@ -138,8 +155,9 @@ export function Storefront() {
 
       {notice && <div className="toast-message" role="status"><Check size={17} />{notice}<button aria-label="Dismiss" onClick={() => setNotice('')}><X size={15} /></button></div>}
       {accountOpen && <AccountModal onClose={() => setAccountOpen(false)} />}
-      {checkoutOpen && <CheckoutModal items={cart.map(({ product, quantity }) => ({ product_id: product.id, quantity }))} total={subtotal} onClose={() => setCheckoutOpen(false)} onAuthRequired={() => { setCheckoutOpen(false); setAccountOpen(true) }} />}
-      {cartOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false) }}><aside className="cart-drawer" aria-label="Shopping bag"><div className="cart-head"><div><span className="eyebrow">YOUR GOOD THINGS</span><h2>Your bag <span>({cartCount})</span></h2></div><button className="icon-button" aria-label="Close bag" onClick={() => setCartOpen(false)}><X size={20} /></button></div>{cart.length ? <><div className="cart-lines">{cart.map(({ product, quantity }) => <div className="cart-line" key={product.id}><img src={product.image_url} alt="" /><div className="cart-line-copy"><strong>{product.name}</strong><span>{currency(product.price_ghs)}</span><div className="quantity-control"><button aria-label={`Remove one ${product.name}`} onClick={() => updateQuantity(product.id, -1)}><Minus size={13} /></button><span>{quantity}</span><button aria-label={`Add one ${product.name}`} onClick={() => updateQuantity(product.id, 1)}><Plus size={13} /></button></div></div><button className="remove-line" aria-label={`Remove ${product.name}`} onClick={() => setCart((current) => current.filter((line) => line.product.id !== product.id))}><X size={16} /></button></div>)}</div><div className="cart-foot"><p><span>Subtotal</span><strong>{currency(subtotal)}</strong></p><small>Shipping calculated at checkout.</small><button className="button-primary checkout-button" onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}>Continue to checkout <ArrowRight size={16} /></button><button className="continue-shopping" onClick={() => setCartOpen(false)}>Keep on exploring</button></div></> : <div className="empty-cart"><span className="empty-bag"><ShoppingBag size={26} /></span><h3>Your bag is taking a little rest.</h3><p>Find something made with care and bring it home.</p><button className="button-primary" onClick={() => setCartOpen(false)}>Explore good things <ArrowRight size={16} /></button></div>}</aside></div>}
+      {openProduct && <ProductModal product={openProduct} saved={savedIds.has(openProduct.id)} onToggleSave={() => void toggleSave(openProduct)} onAdd={(variant) => addToCart(openProduct, variant)} onClose={() => setOpenProductId(null)} onAuthRequired={() => { setOpenProductId(null); setAccountOpen(true) }} />}
+      {checkoutOpen && <CheckoutModal items={cart.map(({ product, variant, quantity }) => ({ product_id: product.id, ...(variant ? { variant_id: variant.id } : {}), quantity }))} total={subtotal} onClose={() => setCheckoutOpen(false)} onAuthRequired={() => { setCheckoutOpen(false); setAccountOpen(true) }} />}
+      {cartOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false) }}><aside className="cart-drawer" aria-label="Shopping bag"><div className="cart-head"><div><span className="eyebrow">YOUR GOOD THINGS</span><h2>Your bag <span>({cartCount})</span></h2></div><button className="icon-button" aria-label="Close bag" onClick={() => setCartOpen(false)}><X size={20} /></button></div>{cart.length ? <><div className="cart-lines">{cart.map((line) => { const { product, variant, quantity } = line; const key = lineKey(line); return <div className="cart-line" key={key}><img src={product.image_url} alt="" /><div className="cart-line-copy"><strong>{product.name}{variant ? ` (${variant.label})` : ''}</strong><span>{currency(linePrice(line))}</span><div className="quantity-control"><button aria-label={`Remove one ${product.name}`} onClick={() => updateQuantity(key, -1)}><Minus size={13} /></button><span>{quantity}</span><button aria-label={`Add one ${product.name}`} onClick={() => updateQuantity(key, 1)}><Plus size={13} /></button></div></div><button className="remove-line" aria-label={`Remove ${product.name}`} onClick={() => setCart((current) => current.filter((item) => lineKey(item) !== key))}><X size={16} /></button></div> })}</div><div className="cart-foot"><p><span>Subtotal</span><strong>{currency(subtotal)}</strong></p><small>Shipping calculated at checkout.</small><button className="button-primary checkout-button" onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}>Continue to checkout <ArrowRight size={16} /></button><button className="continue-shopping" onClick={() => setCartOpen(false)}>Keep on exploring</button></div></> : <div className="empty-cart"><span className="empty-bag"><ShoppingBag size={26} /></span><h3>Your bag is taking a little rest.</h3><p>Find something made with care and bring it home.</p><button className="button-primary" onClick={() => setCartOpen(false)}>Explore good things <ArrowRight size={16} /></button></div>}</aside></div>}
     </main>
   )
 }
