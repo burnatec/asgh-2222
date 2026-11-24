@@ -18,14 +18,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Enter a valid order number and email address.' }, { status: 400 })
     }
     const admin = adminClient()
-    const { data: order, error } = await admin.from('orders').select('id,reference,user_id,status,payment_status,created_at,shipping_details').eq('reference', reference.trim()).maybeSingle()
+    const { data: order, error } = await admin.from('orders').select('id,reference,user_id,status,payment_status,created_at,shipping_details,carrier,tracking_number,shipping_method_name,eta_min,eta_max,eta_unit').eq('reference', reference.trim()).maybeSingle()
     if (error || !order) return NextResponse.json({ error: 'We could not find an order matching those details. Check the order number and email address.' }, { status: 404 })
     const { data: { user }, error: userError } = await admin.auth.admin.getUserById(order.user_id)
     if (userError || !user?.email || user.email.trim().toLowerCase() !== email.trim().toLowerCase()) {
       return NextResponse.json({ error: 'We could not find an order matching those details. Check the order number and email address.' }, { status: 404 })
     }
     const shipping = order.shipping_details && typeof order.shipping_details === 'object' ? order.shipping_details as Record<string, unknown> : {}
+    const { data: events } = await admin.from('order_events').select('status,note,created_at').eq('order_id', order.id).order('created_at', { ascending: true })
     return NextResponse.json({
+      carrier: order.carrier || null,
+      trackingNumber: order.tracking_number || null,
+      methodName: order.shipping_method_name || null,
+      etaMin: order.eta_min ?? null,
+      etaMax: order.eta_max ?? null,
+      etaUnit: order.eta_unit || null,
+      events: (events || []).map((event) => ({ status: event.status, note: event.note, createdAt: event.created_at })),
       reference: order.reference,
       status: order.status,
       paymentStatus: order.payment_status,

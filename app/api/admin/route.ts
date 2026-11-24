@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { sendOrderStatusEmail } from '@/lib/order-status-email'
 
 export const runtime = 'nodejs'
 
@@ -33,7 +34,7 @@ export async function GET() {
     const admin = serviceClient()
     const [productsResult, ordersResult, customersResult] = await Promise.all([
       admin.from('products').select('id,name,slug,description,price_ghs,compare_at_price_ghs,image_url,category,stock,featured,active,created_at').order('created_at', { ascending: false }).limit(100),
-      admin.from('orders').select('id,reference,user_id,status,payment_status,total_ghs,created_at,shipping_details').order('created_at', { ascending: false }).limit(100),
+      admin.from('orders').select('id,reference,user_id,status,payment_status,total_ghs,created_at,shipping_details,carrier,tracking_number,shipping_method_name').order('created_at', { ascending: false }).limit(100),
       admin.from('profiles').select('id,full_name,created_at').order('created_at', { ascending: false }).limit(100),
     ])
     if (productsResult.error || ordersResult.error || customersResult.error) throw new Error('Dashboard data could not be loaded')
@@ -83,9 +84,46 @@ export async function PATCH(request: Request) {
     const body = data as Record<string, unknown>
     const admin = serviceClient()
     if (body.kind === 'order' && typeof body.id === 'string' && ['pending', 'processing', 'shipped', 'delivered', 'cancelled'].includes(String(body.status))) {
-      const { error } = await admin.from('orders').update({ status: body.status }).eq('id', body.id)
+      const status = String(body.status) as 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
+      const clean = (value: unknown, max: number) => typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null
+      const carrier = clean(body.carrier, 80)
+      const trackingNumber = clean(body.tracking_number, 120)
+      const note = clean(body.note, 500)
+      const notify = body.notify !== false
+      const { data: existing, error: lookupError } = await admin.from('orders').select('id,reference,user_id,status,shipping_details,carrier,tracking_number').eq('id', body.id).maybeSingle()
+      if (lookupError || !existing) return NextResponse.json({ error: 'Order not found.' }, { status: 404 })
+      const update: Record<string, unknown> = { status }
+      if (carrier !== null) update.carrier = carrier
+      if (trackingNumber !== null) update.tracking_number = trackingNumber
+      if (status === 'shipped' && existing.status !== 'shipped') update.shipped_at = new Date().toISOString()
+      if (status === 'delivered' && existing.status !== 'delivered') update.delivered_at = new Date().toISOString()
+      const { error } = await admin.from('orders').update(update).eq('id', body.id)
       if (error) return NextResponse.json({ error: 'Could not update the order.' }, { status: 400 })
-      return NextResponse.json({ ok: true })
+
+      let notified = false
+      let emailWarning = ''
+      if (notify && status !== 'pending') {
+        try {
+          const { data: { user } } = await admin.auth.admin.getUserById(existing.user_id)
+          const details = existing.shipping_details && typeof existing.shipping_details === 'object' ? existing.shipping_details as Record<string, unknown> : {}
+          if (!user?.email) throw new Error('Customer has no email address.')
+          await sendOrderStatusEmail({
+            recipient: user.email,
+            reference: existing.reference,
+            status,
+            customerName: typeof details.full_name === 'string' ? details.full_name : '',
+            carrier: carrier ?? existing.carrier,
+            trackingNumber: trackingNumber ?? existing.tracking_number,
+            note,
+          })
+          notified = true
+        } catch (emailError) {
+          console.error('[admin] Status email failed', { message: emailError instanceof Error ? emailError.message : 'unknown' })
+          emailWarning = 'Status saved, but the customer email could not be sent.'
+        }
+      }
+      await admin.from('order_events').insert({ order_id: body.id, status, note, notified })
+      return NextResponse.json({ ok: true, notified, warning: emailWarning || undefined })
     }
     if (body.kind === 'product' && typeof body.id === 'string' && validProduct(body)) {
       const { id: _id, kind: _kind, ...fields } = body
