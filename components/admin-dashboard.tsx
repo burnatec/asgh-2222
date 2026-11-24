@@ -12,7 +12,7 @@ type Product = { id: string; name: string; description: string; price_ghs: numbe
 type Order = { id: string; reference: string; user_id: string; status: string; payment_status: string; total_ghs: number; created_at: string; shipping_details: Record<string, string>; carrier: string | null; tracking_number: string | null }
 type Customer = { id: string; full_name: string | null; created_at: string }
 type Dashboard = { me: { email: string; role: string; permissions: string[] }; categories: Category[]; products: Product[]; orders: Order[]; customers: Customer[]; metrics: { revenue: number; orders: number; customers: number; lowStock: number } }
-const fetcher = async (url: string): Promise<Dashboard> => { const response = await fetch(url); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not load the dashboard.'); return data }
+const fetcher = async (url: string): Promise<Dashboard> => { const response = await fetch(url); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not load the dashboard.'); if (!data?.me || !Array.isArray(data.me.permissions)) throw new Error('Staff access required.'); return data }
 const money = (amount: number) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 0 }).format(amount)
 
 export function AdminDashboard() {
@@ -59,7 +59,7 @@ export function AdminDashboard() {
   return (
     <main className="admin-shell">
       <header className="admin-header"><Link href="/" className="admin-back"><ArrowLeft size={16} /> Storefront</Link><Link href="/" className="brand" aria-label="Afro Superstore home"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-BntWL9FJ4tCF0xmRtGmE95PGUW6bZl.png" alt="" className="brand-logo" /></Link><nav className="admin-nav" aria-label="Admin sections"><Link href="/admin/shipping" className="admin-back">Shipping settings</Link><span className="admin-badge">ADMIN CONSOLE</span></nav></header>
-      {isLoading ? <div className="admin-empty">Loading secure dashboard…</div> : error ? <section className="admin-denied"><ShieldAlert size={24} /><h1>Admin access required</h1><p>This area is restricted to designated administrators. Assign the <code>role: admin</code> claim in the Supabase Auth user&apos;s app metadata, then sign in again.</p><Link href="/" className="button-primary">Return to the store</Link></section> : data && <>
+      {isLoading ? <div className="admin-empty">Loading secure dashboard…</div> : error ? <section className="admin-denied"><ShieldAlert size={24} /><h1>Admin access required</h1><p>This area is restricted to store staff. Sign in with a staff account (owner, manager, fulfilment or content), then reload this page.</p><Link href="/" className="button-primary">Return to the store</Link></section> : data && <>
         <section className="admin-heading"><div><span className="eyebrow">AFRO SUPERSTORE GHANA</span><h1>Good morning, {data.me.role}.</h1><p>Signed in as {data.me.email}. Your store at a glance.</p></div><span className="admin-live"><i /> LIVE OVERVIEW</span></section>
         <section className="admin-metrics" aria-label="Store metrics">
           <article><span><CircleDollarSign size={16} /> Paid sales</span><strong>{money(data.metrics.revenue)}</strong><small>Confirmed payments</small></article>
