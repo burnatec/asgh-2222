@@ -61,7 +61,7 @@ export function AdminDashboard() {
 
   return (
     <main className="admin-shell">
-      <header className="admin-header"><Link href="/" className="admin-back"><ArrowLeft size={16} /> Storefront</Link><Link href="/" className="brand" aria-label="Afro Superstore home"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-BntWL9FJ4tCF0xmRtGmE95PGUW6bZl.png" alt="" className="brand-logo" /></Link><span className="admin-badge">ADMIN CONSOLE</span></header>
+      <header className="admin-header"><Link href="/" className="admin-back"><ArrowLeft size={16} /> Storefront</Link><Link href="/" className="brand" aria-label="Afro Superstore home"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-BntWL9FJ4tCF0xmRtGmE95PGUW6bZl.png" alt="" className="brand-logo" /></Link><nav className="admin-nav" aria-label="Admin sections"><Link href="/admin/shipping" className="admin-back">Shipping settings</Link><span className="admin-badge">ADMIN CONSOLE</span></nav></header>
       {isLoading ? <div className="admin-empty">Loading secure dashboard…</div> : error ? <section className="admin-denied"><ShieldAlert size={24} /><h1>Admin access required</h1><p>This area is restricted to designated administrators. Assign the <code>role: admin</code> claim in the Supabase Auth user&apos;s app metadata, then sign in again.</p><Link href="/" className="button-primary">Return to the store</Link></section> : data && <>
         <section className="admin-heading"><div><span className="eyebrow">AFRO SUPERSTORE GHANA</span><h1>Good morning, admin.</h1><p>Your store at a glance.</p></div><span className="admin-live"><i /> LIVE OVERVIEW</span></section>
         <section className="admin-metrics" aria-label="Store metrics">
