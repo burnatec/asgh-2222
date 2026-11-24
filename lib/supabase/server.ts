@@ -10,7 +10,7 @@ export async function createServerSupabaseClient() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       process.env.SUPABASE_ANON_KEY || '',
     {
-      cookieOptions: { secure: process.env.NODE_ENV === 'production' },
+      cookieOptions: { sameSite: 'none', secure: true },
       cookies: {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
