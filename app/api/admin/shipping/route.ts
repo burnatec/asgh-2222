@@ -7,6 +7,8 @@ const denied = () => NextResponse.json({ error: 'Administrator access required.'
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value)
 const money = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100000
 const text = (value: unknown, max: number) => typeof value === 'string' && value.trim().length > 0 && value.length <= max
+const list = (value: unknown): value is string[] => Array.isArray(value) && value.length <= 60 && value.every((v) => typeof v === 'string' && v.length <= 80)
+const clean = (values: string[]) => [...new Map(values.map((v) => v.trim()).filter(Boolean).map((v) => [v.toLowerCase(), v])).values()]
 const bad = (error = 'Check the fields and try again.') => NextResponse.json({ error }, { status: 400 })
 
 export async function GET() {
@@ -44,8 +46,9 @@ export async function PATCH(request: Request) {
 
     if (body.kind === 'zone') {
       const threshold = body.free_shipping_threshold_ghs
-      if (!uuid(body.id) || !text(body.name, 80) || !money(body.min_order_ghs) || !(threshold === null || money(threshold)) || typeof body.active !== 'boolean') return bad()
-      const { error } = await db.from('shipping_zones').update({ name: String(body.name).trim(), min_order_ghs: body.min_order_ghs, free_shipping_threshold_ghs: threshold, active: body.active, updated_at: new Date().toISOString() }).eq('id', body.id)
+      if (!uuid(body.id) || !text(body.name, 80) || !money(body.min_order_ghs) || !(threshold === null || money(threshold)) || typeof body.active !== 'boolean'
+        || !list(body.cities) || !list(body.regions)) return bad()
+      const { error } = await db.from('shipping_zones').update({ name: String(body.name).trim(), cities: clean(body.cities), regions: clean(body.regions), min_order_ghs: body.min_order_ghs, free_shipping_threshold_ghs: threshold, active: body.active, updated_at: new Date().toISOString() }).eq('id', body.id)
       if (error) return bad('Could not update the zone.')
       return NextResponse.json({ ok: true })
     }
@@ -71,10 +74,35 @@ export async function PATCH(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  if (!await requireAdmin()) return denied()
+  try {
+    const body = await request.json() as Record<string, unknown>
+    if (body.kind !== 'zone' || !uuid(body.id)) return bad()
+    const db = serviceClient()
+    const { data: zone } = await db.from('shipping_zones').select('is_fallback').eq('id', body.id).maybeSingle()
+    if (!zone) return bad('Zone not found.')
+    if (zone.is_fallback) return bad('The catch-all zone cannot be removed. Deactivate it instead.')
+    const { error } = await db.from('shipping_zones').delete().eq('id', body.id)
+    if (error) return bad('This zone is used by existing orders and cannot be removed. Deactivate it instead.')
+    return NextResponse.json({ ok: true })
+  } catch {
+    return NextResponse.json({ error: 'Could not remove the zone.' }, { status: 500 })
+  }
+}
+
 export async function POST(request: Request) {
   if (!await requireAdmin()) return denied()
   try {
     const body = await request.json() as Record<string, unknown>
+    if (body.kind === 'zone') {
+      if (!text(body.name, 80) || !list(body.cities) || !list(body.regions)) return bad()
+      const name = String(body.name).trim()
+      const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'zone'}-${Math.random().toString(36).slice(2, 6)}`
+      const { error } = await serviceClient().from('shipping_zones').insert({ name, slug, cities: clean(body.cities), regions: clean(body.regions), is_fallback: false, active: true, sort_order: 100 })
+      if (error) return bad('Could not add the zone.')
+      return NextResponse.json({ ok: true }, { status: 201 })
+    }
     if (!text(body.name, 100) || !text(body.address, 200) || !text(body.city, 80) || !text(body.region, 80) || !(body.phone === null || body.phone === undefined || body.phone === '' || text(body.phone, 30))) return bad()
     const { error } = await serviceClient().from('pickup_locations').insert({ name: String(body.name).trim(), address: String(body.address).trim(), city: String(body.city).trim(), region: String(body.region).trim(), phone: body.phone || null, active: true })
     if (error) return bad('Could not add the pickup location.')

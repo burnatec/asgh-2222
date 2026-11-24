@@ -18,7 +18,9 @@ const fetcher = async (url: string): Promise<Settings> => {
   return data
 }
 
-async function send(method: 'PATCH' | 'POST', body: unknown) {
+const toList = (value: string) => value.split(',').map((v) => v.trim()).filter(Boolean)
+
+async function send(method: 'PATCH' | 'POST' | 'DELETE', body: unknown) {
   const response = await fetch('/api/admin/shipping', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const result = await response.json()
   if (!response.ok) throw new Error(result.error || 'Could not save.')
@@ -47,21 +49,27 @@ function MethodRow({ method, onSaved, report }: { method: Method; onSaved: () =>
 }
 
 function ZoneRow({ zone, onSaved, report }: { zone: Zone; onSaved: () => void; report: Report }) {
-  const [draft, setDraft] = useState({ name: zone.name, min_order_ghs: String(zone.min_order_ghs), free: zone.free_shipping_threshold_ghs === null ? '' : String(zone.free_shipping_threshold_ghs), active: zone.active })
+  const [draft, setDraft] = useState({ name: zone.name, cities: zone.cities.join(', '), regions: zone.regions.join(', '), min_order_ghs: String(zone.min_order_ghs), free: zone.free_shipping_threshold_ghs === null ? '' : String(zone.free_shipping_threshold_ghs), active: zone.active })
   async function save() {
     try {
-      await send('PATCH', { kind: 'zone', id: zone.id, name: draft.name, min_order_ghs: Number(draft.min_order_ghs), free_shipping_threshold_ghs: draft.free === '' ? null : Number(draft.free), active: draft.active })
+      await send('PATCH', { kind: 'zone', id: zone.id, name: draft.name, cities: toList(draft.cities), regions: toList(draft.regions), min_order_ghs: Number(draft.min_order_ghs), free_shipping_threshold_ghs: draft.free === '' ? null : Number(draft.free), active: draft.active })
       report(`${draft.name} saved.`); onSaved()
     } catch (error) { report(error instanceof Error ? error.message : 'Could not save.') }
   }
-  const coverage = zone.is_fallback ? 'All other locations' : [...zone.cities.slice(0, 3), ...zone.regions].join(', ') || '—'
+  async function remove() {
+    if (!window.confirm(`Remove the zone "${zone.name}" and its rates?`)) return
+    try { await send('DELETE', { kind: 'zone', id: zone.id }); report(`${zone.name} removed.`); onSaved() }
+    catch (error) { report(error instanceof Error ? error.message : 'Could not remove.') }
+  }
   return (
     <tr>
-      <td><input className="ship-input" aria-label={`Name for zone ${zone.name}`} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /><small>{coverage}</small></td>
+      <td><input className="ship-input" aria-label={`Name for zone ${zone.name}`} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />{zone.is_fallback && <small>Catch-all for all other locations</small>}</td>
+      <td>{zone.is_fallback ? <small>—</small> : <input className="ship-input ship-wide" placeholder="Comma-separated" aria-label={`Cities for ${zone.name}`} value={draft.cities} onChange={(e) => setDraft({ ...draft, cities: e.target.value })} />}</td>
+      <td>{zone.is_fallback ? <small>—</small> : <input className="ship-input" placeholder="Comma-separated" aria-label={`Regions for ${zone.name}`} value={draft.regions} onChange={(e) => setDraft({ ...draft, regions: e.target.value })} />}</td>
       <td><input className="ship-input ship-num" type="number" min="0" step="0.01" aria-label={`Minimum order for ${zone.name}`} value={draft.min_order_ghs} onChange={(e) => setDraft({ ...draft, min_order_ghs: e.target.value })} /></td>
       <td><input className="ship-input ship-num" type="number" min="0" step="0.01" placeholder="Off" aria-label={`Free shipping threshold for ${zone.name}`} value={draft.free} onChange={(e) => setDraft({ ...draft, free: e.target.value })} /></td>
       <td><label className="ship-toggle"><input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /> Active</label></td>
-      <td><button className="ship-save" onClick={save}>Save</button></td>
+      <td><button className="ship-save" onClick={save}>Save</button>{!zone.is_fallback && <button className="ship-save" onClick={remove}>Remove</button>}</td>
     </tr>
   )
 }
@@ -107,7 +115,19 @@ export function AdminShippingSettings() {
   const [notice, setNotice] = useState('')
   const [adding, setAdding] = useState(false)
   const [newPickup, setNewPickup] = useState({ name: '', address: '', city: '', region: 'Greater Accra', phone: '' })
+  const [addingZone, setAddingZone] = useState(false)
+  const [newZone, setNewZone] = useState({ name: '', cities: '', regions: '' })
   const refresh = () => { void mutate() }
+
+  async function addZone(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setAddingZone(true); setNotice('')
+    try {
+      await send('POST', { kind: 'zone', name: newZone.name, cities: toList(newZone.cities), regions: toList(newZone.regions) })
+      setNewZone({ name: '', cities: '', regions: '' })
+      setNotice('Zone added. Set its rates in the grid below so customers can choose a delivery method.'); await mutate()
+    } catch (addError) { setNotice(addError instanceof Error ? addError.message : 'Could not add the zone.') }
+    finally { setAddingZone(false) }
+  }
 
   async function addPickup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setAdding(true); setNotice('')
@@ -131,7 +151,12 @@ export function AdminShippingSettings() {
             <div className="admin-table-wrap"><table><thead><tr><th>Method</th><th>Description</th><th>Estimate</th><th>Status</th><th><span className="sr-only">Save</span></th></tr></thead><tbody>{data.methods.map((m) => <MethodRow key={m.id} method={m} onSaved={refresh} report={setNotice} />)}</tbody></table></div></section>
 
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Delivery zones</h2><p>Minimum order and the subtotal at which shipping becomes free. Leave blank to disable free shipping.</p></div></div>
-            <div className="admin-table-wrap"><table><thead><tr><th>Zone</th><th>Min order (GH₵)</th><th>Free shipping from (GH₵)</th><th>Status</th><th><span className="sr-only">Save</span></th></tr></thead><tbody>{data.zones.map((z) => <ZoneRow key={z.id} zone={z} onSaved={refresh} report={setNotice} />)}</tbody></table></div></section>
+            <div className="admin-table-wrap"><table><thead><tr><th>Zone</th><th>Cities</th><th>Regions</th><th>Min order (GH₵)</th><th>Free shipping from (GH₵)</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{data.zones.map((z) => <ZoneRow key={`${z.id}-${z.name}-${z.cities.join('|')}-${z.regions.join('|')}`} zone={z} onSaved={refresh} report={setNotice} />)}</tbody></table></div>
+            <form className="ship-add" onSubmit={addZone}><h3>Add a delivery zone</h3>
+              <input className="ship-input" required placeholder="Zone name" aria-label="New zone name" maxLength={80} value={newZone.name} onChange={(e) => setNewZone({ ...newZone, name: e.target.value })} />
+              <input className="ship-input ship-wide" placeholder="Cities, comma-separated" aria-label="New zone cities" value={newZone.cities} onChange={(e) => setNewZone({ ...newZone, cities: e.target.value })} />
+              <input className="ship-input" placeholder="Regions, comma-separated" aria-label="New zone regions" value={newZone.regions} onChange={(e) => setNewZone({ ...newZone, regions: e.target.value })} />
+              <button className="ship-save ship-primary" disabled={addingZone}>{addingZone ? 'Adding…' : 'Add zone'}</button></form></section>
 
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Rates by zone</h2><p>Fee in GH₵ for each method. Leave empty where a method is not offered.</p></div></div>
             <div className="admin-table-wrap"><table><thead><tr><th>Zone</th>{data.methods.map((m) => <th key={m.id}>{m.name}</th>)}</tr></thead><tbody>{data.zones.map((z) => <tr key={z.id}><td><strong>{z.name}</strong></td>{data.methods.map((m) => <RateCell key={`${z.id}-${m.id}-${data.rates.find((r) => r.zone_id === z.id && r.method_id === m.id)?.fee_ghs ?? 'x'}`} zone={z} method={m} rate={data.rates.find((r) => r.zone_id === z.id && r.method_id === m.id)} onSaved={refresh} report={setNotice} />)}</tr>)}</tbody></table></div></section>
