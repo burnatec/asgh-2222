@@ -27,8 +27,9 @@ export async function POST(request: Request) {
 
     const body: unknown = await request.json()
     if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid checkout request.' }, { status: 400 })
-    const { items, shipping, idempotencyKey } = body as Record<string, unknown>
-    if (!Array.isArray(items) || !items.length || items.length > 20 || !validShipping(shipping) || typeof idempotencyKey !== 'string' || !/^[0-9a-f-]{36}$/i.test(idempotencyKey)) {
+    const { items, shipping, idempotencyKey, shippingMethod, pickupLocationId } = body as Record<string, unknown>
+    const validPickup = pickupLocationId == null || (typeof pickupLocationId === 'string' && /^[0-9a-f-]{36}$/i.test(pickupLocationId))
+    if (!Array.isArray(items) || !items.length || items.length > 20 || !validShipping(shipping) || typeof idempotencyKey !== 'string' || !/^[0-9a-f-]{36}$/i.test(idempotencyKey) || typeof shippingMethod !== 'string' || !/^[a-z_]{2,40}$/.test(shippingMethod) || !validPickup) {
       return NextResponse.json({ error: 'Check your delivery details and bag, then try again.' }, { status: 400 })
     }
 
@@ -54,7 +55,12 @@ export async function POST(request: Request) {
       p_idempotency_key: idempotencyKey,
       p_items: items,
       p_shipping: shipping,
+      p_method: shippingMethod,
+      p_pickup_location_id: pickupLocationId ?? null,
     })
+    if (orderError?.message?.includes('shipping unavailable') || orderError?.message?.includes('pickup location')) {
+      return NextResponse.json({ error: 'That delivery option is not available for your address. Please choose another.' }, { status: 409 })
+    }
     if (orderError || !orderRows?.[0]) return NextResponse.json({ error: 'One or more items are unavailable. Please refresh your bag.' }, { status: 409 })
     const order = orderRows[0] as { order_id: string; order_reference: string; total_ghs: number }
 
