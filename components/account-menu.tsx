@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
-import { LayoutDashboard, LogOut, Package, UserPlus, UserRound, LogIn } from 'lucide-react'
+import { LayoutDashboard, LogOut, Package, Settings, UserPlus, UserRound, LogIn } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Me = { user: { email: string; name: string } | null; isStaff: boolean }
@@ -45,6 +45,7 @@ export function AccountMenu({ onSignIn, onRegister }: { onSignIn: () => void; on
               <div className="account-dropdown-head"><strong>{user.name || 'Welcome back'}</strong><small>{user.email}</small></div>
               <Link role="menuitem" href="/account" onClick={() => setOpen(false)}><UserRound size={16} />My profile</Link>
               <Link role="menuitem" href="/account" onClick={() => setOpen(false)}><Package size={16} />My orders</Link>
+              <Link role="menuitem" href="/account/settings" onClick={() => setOpen(false)}><Settings size={16} />Settings</Link>
               {data?.isStaff && <Link role="menuitem" href="/admin" onClick={() => setOpen(false)}><LayoutDashboard size={16} />Dashboard</Link>}
               <button role="menuitem" onClick={signOut}><LogOut size={16} />Sign out</button>
             </>
