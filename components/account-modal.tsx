@@ -7,8 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 
 type Mode = 'sign-in' | 'sign-up' | 'reset'
 
-export function AccountModal({ onClose }: { onClose: () => void }) {
-  const [mode, setMode] = useState<Mode>('sign-in')
+export function AccountModal({ onClose, initialMode = 'sign-in' }: { onClose: () => void; initialMode?: 'sign-in' | 'sign-up' }) {
+  const [mode, setMode] = useState<Mode>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
