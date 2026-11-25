@@ -13,8 +13,8 @@ export const metadata: Metadata = {
     locale: 'en_GH',
   },
   icons: {
-    icon: [{ url: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/favicon-J3FBt5EemjGJX2UercXcsBhA0sxYAh.png', type: 'image/png' }],
-    shortcut: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/favicon-J3FBt5EemjGJX2UercXcsBhA0sxYAh.png',
+    icon: [{ url: '/favicon.png?v=2', type: 'image/png', sizes: '500x500' }],
+    shortcut: '/favicon.png?v=2',
     apple: '/apple-icon.png',
   },
 }
