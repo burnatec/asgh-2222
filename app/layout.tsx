@@ -13,9 +13,9 @@ export const metadata: Metadata = {
     locale: 'en_GH',
   },
   icons: {
-    icon: [{ url: '/favicon.png?v=2', type: 'image/png', sizes: '500x500' }],
-    shortcut: '/favicon.png?v=2',
-    apple: '/apple-icon.png',
+  icon: [{ url: '/favicon.png?v=3', type: 'image/png', sizes: '500x500' }],
+  shortcut: '/favicon.png?v=3',
+  apple: '/apple-icon.png?v=3',
   },
 }
 
